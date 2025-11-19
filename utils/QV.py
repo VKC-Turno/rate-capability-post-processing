@@ -203,6 +203,7 @@ def plot_cell_qv_grid(
     stats_df: Optional[pd.DataFrame] = None,
     include_rest: bool = False,
     show: bool = True,
+    summary_rows: Optional[List[dict]] = None,
 ) -> Tuple[plt.Figure, np.ndarray]:
     """Plot a grid (cycles x step names) of Q-V curves for a single cell."""
 
@@ -277,6 +278,17 @@ def plot_cell_qv_grid(
                     label=f"Step {step_no} ({c_rate:.2f}C, AUC {area:.2f} AhV)",
                     color=color,
                 )
+                if summary_rows is not None:
+                    summary_rows.append(
+                        {
+                            "cell_name": cell_name,
+                            "cycle_no": cycle,
+                            "step_no": step_no,
+                            "step_name": step_name,
+                            "c_rate": c_rate,
+                            "auc_ahv": area,
+                        }
+                    )
 
             if r == 0:
                 ax.set_title(step_name)
@@ -321,6 +333,7 @@ def export_qv_grid_pdf(
 
     stats = pd.read_csv(stats_csv)
     output_pdf.parent.mkdir(parents=True, exist_ok=True)
+    summary_rows: List[dict] = []
 
     with PdfPages(output_pdf) as pdf:
         for csv_path in csv_files:
@@ -329,9 +342,17 @@ def export_qv_grid_pdf(
                 stats_df=stats,
                 include_rest=include_rest,
                 show=False,
+                summary_rows=summary_rows,
             )
             pdf.savefig(fig, bbox_inches="tight")
             plt.close(fig)
+
+    if summary_rows:
+        summary_df = pd.DataFrame(summary_rows)
+        summary_dir = Path("/home/kcv/Desktop/Rate_Capability/results/data")
+        summary_dir.mkdir(parents=True, exist_ok=True)
+        summary_path = summary_dir / "qv_auc_summary.csv"
+        summary_df.to_csv(summary_path, index=False)
 
     return output_pdf
 
