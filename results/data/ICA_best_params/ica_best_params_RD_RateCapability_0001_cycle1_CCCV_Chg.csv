@@ -1,0 +1,2 @@
+cell_id,cycle_no,steps,step_names,dv,sg_window,sg_poly,windows
+RD_RateCapability_0001,1,CCCV_Chg,CCCV_Chg,0.001142105263157894,,,"{'CCCV_Chg': (3.2, 3.5)}"

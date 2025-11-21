@@ -1,6 +1,9 @@
 numpy
 pandas
 plotly
+nbformat>=4.2.0
+pwlf
+scipy>=1.10.0
 plotly-express
 scikit-learn
 kaleido
@@ -11,3 +14,4 @@ matplotlib
 seaborn
 PyPDF2
 boto3
+streamlit
