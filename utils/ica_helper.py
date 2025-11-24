@@ -317,104 +317,98 @@ def plot_peak_trends(
     output_pdf.parent.mkdir(parents=True, exist_ok=True)
     symbol_caption = "▲ |dQ/dV| (primary), ○ SoH (secondary), ✕ Peak Voltage (tertiary)"
 
+    ordered_steps: List[str] = []
+    for name in ("CCCV_Chg", "CC_DChg"):
+        if name in step_order:
+            ordered_steps.append(name)
+    ordered_steps.extend(step for step in step_order if step not in ordered_steps)
+    ordered_steps = list(dict.fromkeys(ordered_steps))
+
+    cycles = sorted(df["cycle no"].dropna().unique())
+    max_peaks = int(df["peak_rank"].max()) if df["peak_rank"].notna().any() else 1
+    cell_ids = sorted(df["cell_id"].dropna().unique())
+    rng = np.random.default_rng(42)
+    palette = rng.random((len(cell_ids), 3))
+
     with PdfPages(output_pdf) as pdf:
-        for cell in cells:
-            cell_df = df[df["cell_id"] == cell]
-            if cell_df.empty:
+        for step in ordered_steps:
+            step_df = df[df["step name"].str.strip() == step]
+            if step_df.empty:
                 continue
-            cmap = get_cmap("viridis", len(ALLOWED_RATES))
-            norm = Normalize(ALLOWED_RATES.min(), ALLOWED_RATES.max())
-            legend_handles = [
-                Line2D(
-                    [], [], color=cmap(norm(rate)), marker="s", linestyle="-", linewidth=0.5, label=f"{rate:.1f}C"
-                )
-                for rate in ALLOWED_RATES
-            ]
-
-            for step in step_order:
-                step_df = cell_df[cell_df["step name"].str.strip() == step]
-                if step_df.empty:
+            for peak_rank in range(1, max_peaks + 1):
+                peak_df = step_df[step_df["peak_rank"] == peak_rank]
+                if peak_df.empty:
                     continue
-                rows = int(step_df["peak_rank"].max())
-                rows = max(rows, 1)
-                fig, axes = plt.subplots(
-                    rows,
-                    1,
-                    sharex=True,
-                    figsize=(7.8, 2.6 * rows),
-                )
-                axes = np.atleast_1d(axes)
-                bg = "#ffe8e8" if step.strip().upper() == "CC_DCHG" else "#e8ffe8"
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax2 = ax.twinx()
+                ax3 = ax.twinx()
+                ax3.spines["right"].set_position(("axes", 1.1))
+                ax3.spines["right"].set_visible(True)
+                bg = "#e8ffe8" if step.strip().upper() == "CCCV_CHG" else "#ffe8e8"
+                ax.set_facecolor(bg)
 
-                for row_idx, ax in enumerate(axes):
-                    ax.set_facecolor(bg)
-                    peak_rank = row_idx + 1
-                    peak_subset = step_df[step_df["peak_rank"] == peak_rank]
-                    if peak_subset.empty:
-                        ax.text(0.5, 0.5, f"No data for P{peak_rank}", ha="center", va="center")
-                        ax.axis("off")
+                handles = []
+                for cell in cell_ids:
+                    cell_subset = peak_df[peak_df["cell_id"] == cell]
+                    if cell_subset.empty:
                         continue
+                    cell_subset = cell_subset.sort_values("cycle no")
+                    x = cell_subset["cycle no"].to_numpy()
+                    color = palette[cell_ids.index(cell)]
+                    ax.scatter(
+                        x,
+                        cell_subset["peak_dq_dv"].abs() / 1000.0,
+                        color=color,
+                        marker="^",
+                        s=25,
+                        label=cell,
+                    )
+                    ax2.scatter(
+                        x,
+                        cell_subset["voltage_at_peak"],
+                        color=color,
+                        marker="x",
+                        s=18,
+                        alpha=0.85,
+                    )
+                    ax3.scatter(
+                        x,
+                        cell_subset["soh_at_peak"],
+                        facecolors="none",
+                        edgecolors=color,
+                        marker="o",
+                        s=20,
+                        linewidths=0.7,
+                    )
+                    handles.append(
+                        Line2D([], [], color=color, marker="^", linestyle="none", label=cell)
+                    )
 
-                    ax2 = ax.twinx()
-                    ax3 = ax.twinx()
-                    ax3.spines["right"].set_position(("axes", 1.08))
-                    ax3.spines["right"].set_visible(True)
+                if not handles:
+                    ax.text(0.5, 0.5, "No data for these peaks", ha="center", va="center", transform=ax.transAxes)
+                ax.set_xticks(cycles)
+                ax.set_xticklabels([f"{int(c)}" for c in cycles])
+                ax.set_ylabel("|dQ/dV| (kAh/V)")
+                ax2.set_ylabel("Peak Voltage (V)")
+                ax3.set_ylabel("SoH at Peak (%)")
+                ax.set_xlabel("Cycle no")
+                ax.grid(alpha=0.3, linewidth=0.5)
+                ax.tick_params(axis="x", labelsize=9)
+                ax.set_title(f"{step} – P{peak_rank}", fontsize=13)
 
-                    for rate in sorted(peak_subset["c_rate"].dropna().unique()):
-                        grp = peak_subset[peak_subset["c_rate"] == rate].sort_values("cycle no")
-                        if grp.empty:
-                            continue
-                        color = cmap(norm(abs(rate)))
-                        cycles = grp["cycle no"]
-                        ax.plot(
-                            cycles,
-                            grp["peak_dq_dv"].abs() / 1000.0,
-                            color=color,
-                            marker="^",
-                            linewidth=0.7,
-                            markersize=4,
-                            label=f"{abs(rate):.1f}C",
-                        )
-                        ax2.scatter(
-                            cycles,
-                            grp["voltage_at_peak"],
-                            color=color,
-                            marker="x",
-                            s=16,
-                            alpha=0.85,
-                        )
-                        ax3.scatter(
-                            cycles,
-                            grp["soh_at_peak"],
-                            facecolors="none",
-                            edgecolors=color,
-                            marker="o",
-                            s=18,
-                            linewidths=0.7,
-                        )
-
-                    ax.set_ylabel("|dQ/dV| (kAh/V)")
-                    ax2.set_ylabel("Peak Voltage (V)")
-                    ax3.set_ylabel("SoH at Peak (%)")
-                    ax.set_title(f"{cell} – {step} – P{peak_rank}")
-                    ax.grid(alpha=0.25, linewidth=0.5)
-                    ax.tick_params(axis="x", rotation=0)
-                    ax2.grid(False)
-                    ax3.grid(False)
-
-                axes[-1].set_xlabel("Cycle no")
-                fig.suptitle(f"{cell} – {step} Peak Trends", fontsize=14)
-                legend = fig.legend(
-                    handles=legend_handles,
-                    loc="lower center",
-                    ncol=len(legend_handles),
+                short_labels = [h.get_label().replace("RD_RateCapability_", "") for h in handles]
+                cell_legend = fig.legend(
+                    handles,
+                    short_labels,
+                    loc="upper center",
+                    ncol=4,
                     frameon=False,
-                    bbox_to_anchor=(0.5, 0.02),
+                    bbox_to_anchor=(0.5, 0.98),
                 )
-                legend.set_title("C-rate", prop={"size": 9})
-                fig.text(0.5, 0.07, symbol_caption, ha="center", fontsize=9)
-                fig.tight_layout(rect=[0.08, 0.16, 0.97, 0.93])
-                fig.subplots_adjust(hspace=0.2)
+                cell_legend.set_title("Cell ID", prop={"size": 9})
+
+                fig.text(0.5, 0.06, symbol_caption, ha="center", fontsize=9)
+                fig.tight_layout(rect=[0.04, 0.18, 0.98, 0.94])
                 pdf.savefig(fig)
                 plt.close(fig)
 

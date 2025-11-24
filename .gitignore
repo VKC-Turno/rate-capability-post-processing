@@ -3,3 +3,5 @@ results/data/soc_data
 results/data/resistance_data
 results/data/ocv_power_data
 results/data/adr_data
+results/data/merged_temperarure_data
+results/data/heat_generation
