@@ -98,6 +98,24 @@ def windowed_knees(
 def knee_points(soc: np.ndarray, volt: np.ndarray, step_name: str) -> Tuple[Tuple[float, float], Tuple[float, float]]:
     """Return knees for the provided trace (with CC_DChg-specific windows)."""
 
+    subset_df = pd.DataFrame({"soc(%)": soc, "volt(v)": volt})
+    try:
+        piece_low, piece_high = piecewise_knees(
+            subset_df,
+            step_name=step_name,
+            segments=7,
+            low_index=2,
+            high_index=6,
+        )
+        if (
+            not np.isnan(piece_low[0])
+            and not np.isnan(piece_high[0])
+            and 0.0 <= piece_low[0] <= 35.0
+        ):
+            return piece_low, piece_high
+    except Exception:
+        piece_low = piece_high = (float("nan"), float("nan"))
+
     step_clean = step_name.strip().lower()
     if step_clean == "cc_dchg":
         low_win = ((80.0, 100.0), (2.95, 3.35))
@@ -162,6 +180,7 @@ def piecewise_knees(
     segments: int = 7,
     low_index: int = 2,
     high_index: int = 6,
+    max_points: int = 800,
 ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
     """Piecewise-linear knees using `segments` breakpoints."""
 
@@ -172,6 +191,8 @@ def piecewise_knees(
     subset = subset.sort_values("soc(%)")
     soc = subset["soc(%)"].values
     volt = subset["volt(v)"].values
+    if max_points and max_points > 0:
+        soc, volt = _downsample(soc, volt, max_points=max_points)
 
     try:
         from pwlf import PiecewiseLinFit

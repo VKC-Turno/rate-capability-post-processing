@@ -111,7 +111,7 @@ def save_knee_summary(
         return output_csv
 
     worker_count = processes if processes is not None else cpu_count()
-    worker_count = max(1, worker_count)
+    worker_count = max(1, min(worker_count, len(csv_paths)))
     tasks = [
         (
             path,

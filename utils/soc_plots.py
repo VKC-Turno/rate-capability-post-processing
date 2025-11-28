@@ -109,7 +109,7 @@ def plot_cell_socv_grid(
             if step_name.strip().lower() == "cc_dchg":
                 ax.set_xlim(100, 0)
             else:
-                ax.set_xlim(0, 100)
+                ax.set_xlim(100, 0)
 
     fig.suptitle(f"{cell_name} - SoC-V by Cycle and Step Name", y=1.02)
     fig.tight_layout(rect=[0, 0, 1, 0.98])
